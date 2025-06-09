@@ -1,0 +1,7 @@
+colorama==0.4.6
+imbalanced-learn==0.13.0
+pipdeptree==2.26.1
+questionary==2.1.0
+ucimlrepo==0.0.7
+pandas 
+scikit-learn 
