@@ -2,8 +2,6 @@
 
 Este projeto implementa um sistema inteligente para auxiliar no diagnóstico, determinação de severidade e manejo de apendicite pediátrica, utilizando modelos de Machine Learning (RandomForests).
 
-## Estrutura do Projeto
-
 ## Como Usar
 
 Siga os passos abaixo para configurar e executar o sistema.
@@ -53,7 +51,6 @@ Siga os passos abaixo para configurar e executar o sistema.
 
 Com o ambiente virtual ativado e as dependências instaladas, execute o script principal a partir da raiz do projeto:
 
-```bash
 python src/main.py
 
 O sistema exibirá um menu no terminal com as seguintes opções:
@@ -62,10 +59,11 @@ Treinar modelos: Realiza o pré-processamento dos dados, treina os modelos de cl
 Diagnosticar um novo paciente: Coleta informações do paciente via terminal, aplica os modelos treinados e exibe um diagnóstico, severidade e manejo. Os resultados são salvos em data/pacientes_inferidos.csv.
 Sair: Encerra a aplicação.
 
+## Estrutura do Projeto
+
 ```bash
 Avalia-o-2o.-bimestre---apendicite/
-├── data/
-│   └── app_data.csv        # Dataset principal
+├── data/  
 │   └── pacientes_inferidos.csv # Saída das inferências
 ├── models/                 # Modelos de ML treinados e scaler
 │   └── (arquivos .pkl gerados após o treinamento)
