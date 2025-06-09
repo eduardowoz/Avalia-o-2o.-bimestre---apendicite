@@ -3,7 +3,7 @@
 Este projeto implementa um sistema inteligente para auxiliar no diagnóstico, determinação de severidade e manejo de apendicite pediátrica, utilizando modelos de Machine Learning (RandomForests).
 
 ## Estrutura do Projeto
-
+```bash
 Avalia-o-2o.-bimestre---apendicite/
 ├── data/
 │   └── app_data.csv        # Dataset principal
@@ -30,7 +30,7 @@ Avalia-o-2o.-bimestre---apendicite/
 ├── .gitignore              # Ignora arquivos não versionados
 └── requirements.txt        # Dependências do projeto
 └── README.md               # Este arquivo
-
+'''
 ## Como Usar
 
 Siga os passos abaixo para configurar e executar o sistema.
