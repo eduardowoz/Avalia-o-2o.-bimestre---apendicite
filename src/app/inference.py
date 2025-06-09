@@ -161,7 +161,8 @@ def inferir_paciente(paciente_normalizado_df: pd.DataFrame):
         salvar_inferencia_csv(dados_para_salvar)
         return
     
-    model_diagnosis = load(MODELS_DIR / 'pediactric_appendicitis_Diagnosis_model.pkl')
+    with open(MODELS_DIR / 'pediactric_appendicitis_Diagnosis_model.pkl', "rb") as f:
+        model_diagnosis = load(f)
     diag_pred_class = model_diagnosis.predict(paciente_normalizado_df)[0]
     
     diag_proba_list = diagnostico_proba[0]
@@ -182,7 +183,8 @@ def inferir_paciente(paciente_normalizado_df: pd.DataFrame):
         severity_proba = inferir_target(paciente_normalizado_df, 'Severity')
         
         if severity_proba is not None:
-            model_severity = load(MODELS_DIR / 'pediactric_appendicitis_Severity_model.pkl')
+            with open(MODELS_DIR / 'pediactric_appendicitis_Severity_model.pkl', "rb") as f:
+                model_severity = load(f)
             sev_pred_class = model_severity.predict(paciente_normalizado_df)[0]
             sev_proba_list = severity_proba[0]
             sev_classes = model_severity.classes_
@@ -200,7 +202,8 @@ def inferir_paciente(paciente_normalizado_df: pd.DataFrame):
         management_proba = inferir_target(paciente_normalizado_df, 'Management')
         
         if management_proba is not None:
-            model_management = load(MODELS_DIR / 'pediactric_appendicitis_Management_model.pkl')
+            with open(MODELS_DIR / 'pediactric_appendicitis_Management_model.pkl', "rb") as f:
+                model_management = load(f)
             mgmt_pred_class = model_management.predict(paciente_normalizado_df)[0]
             mgmt_proba_list = management_proba[0]
             mgmt_classes = model_management.classes_

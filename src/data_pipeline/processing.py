@@ -1,24 +1,42 @@
 # src/data_pipeline/processing.py
 
+# src/data_pipeline/processing.py
+
 import pandas as pd
 from ucimlrepo import fetch_ucirepo
 
 def importar_dataset():
-    """Importa o dataset de apendicite pediátrica."""
+    """Importa o dataset de apendicite pediátrica do repositório UCI."""
     print("> Buscando dataset do repositório UCI...")
-
     try:
-        df = pd.read_csv('data/app_data.csv', sep=';')
-        print("> Dataset 'app_data.csv' importado com sucesso da pasta 'data/'.")
-    except FileNotFoundError:
-        print("ERRO: O arquivo 'app_data.csv' não foi encontrado na pasta 'data/'.")
-        print("Certifique-se de que a base de dados foi movida para o local correto.")
-        return None
+        # Busca o dataset Regensburg Pediatric Appendicitis (ID 938)
+        regensburg_pediatric_appendicitis = fetch_ucirepo(id=938)
+
+        # O objeto retornado tem as features (X) e targets (y) separadas.
+        # Concatenamos para formar um único DataFrame, como esperado pelo pipeline.
+        X = regensburg_pediatric_appendicitis.data.features
+        y = regensburg_pediatric_appendicitis.data.targets
+
+        df = pd.concat([X, y], axis=1)
+
+        print("> Dataset importado do UCI com sucesso.")
+
+        # Remove a linha de depuração que adicionamos anteriormente para verificar as colunas.
+        # print("\n--- INFORMAÇÕES DO DATAFRAME APÓS IMPORTAÇÃO ---")
+        # print("Colunas presentes no dados_raw:", df.columns.tolist())
+        # print("Primeiras 5 linhas do dados_raw:\n", df.head())
+        # print("Verificando nulos nas colunas alvo no dados_raw:\n", df[['Severity', 'Diagnosis', 'Management']].isnull().sum())
+        # print("--- FIM DA DEPURAÇÃO ---")
+
     except Exception as e:
-        print(f"ERRO ao carregar o dataset: {e}")
+        print(f"ERRO ao carregar o dataset do UCI: {e}")
+        print("Verifique sua conexão com a internet ou se o ID do dataset está correto.")
         return None
 
     return df
+
+# ... o restante do seu arquivo processing.py permanece o mesmo ...
+# preencher_moda, preencher_mediana, preprocessar_dados
 
 def preencher_moda(dados, coluna):
     """Preenche valores faltantes de uma coluna com a moda."""

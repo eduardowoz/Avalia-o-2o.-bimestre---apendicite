@@ -108,6 +108,17 @@ def executar_pipeline_de_treinamento():
     if dados_raw is None:
         print("Pipeline de treinamento interrompido devido a erro na importação do dataset.")
         return
+#==============================================================================================================================    
+    # --- INÍCIO DA DEPURAÇÃO ---
+    print("\n--- INFORMAÇÕES DO DATAFRAME APÓS IMPORTAÇÃO ---")
+    print("Colunas presentes no dados_raw:", dados_raw.columns.tolist())
+    print("Primeiras 5 linhas do dados_raw:\n", dados_raw.head())
+    print("Verificando nulos nas colunas alvo no dados_raw:\n", dados_raw[['Severity', 'Diagnosis', 'Management']].isnull().sum())
+    print("--- FIM DA DEPURAÇÃO ---")
+    # --- FIM DA DEPURAÇÃO ---
+
+    # 2. Pré-processar os dados
+    dados_processados = preprocessar_dados(dados_raw.copy())
 
     # Pré-processa os dados brutos.
     dados_processados = preprocessar_dados(dados_raw.copy())
