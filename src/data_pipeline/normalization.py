@@ -5,20 +5,21 @@ from sklearn import preprocessing
 from pickle import dump, load
 from pathlib import Path
 
-# Define caminhos para arquivos de modelos.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-NORMALIZER_MODEL_PATH = MODELS_DIR / "modelo_normalizador.pkl"
+# Define caminhos para arquivos de artefatos do modelo.
+DIRETORIO_RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
+DIRETORIO_MODELOS = DIRETORIO_RAIZ_PROJETO / "models"
+CAMINHO_MODELO_ESCALONADOR = DIRETORIO_MODELOS / "modelo_escalonador_minmax.pkl"
 
-# Lista de colunas numéricas usadas no dataset.
-COLUNAS_NUMERICAS = [
+# Conjunto de identificadores para colunas numéricas no dataset.
+CONJUNTO_DE_METRICAS_QUANTITATIVAS = [
     'Age', 'BMI', 'Height', 'Weight', 'Length_of_Stay', 'Appendix_Diameter', 'Body_Temperature',
     'WBC_Count', 'Neutrophil_Percentage', 'RBC_Count', 'Hemoglobin', 'RDW', 'Thrombocyte_Count',
     'CRP', 'Alvarado_Score', 'Paedriatic_Appendicitis_Score'
 ]
 
-# Lista de todas as features esperadas pelo modelo após pré-processamento.
-ENCODED_FEATURES_NAMES = [
+# Lista exata de todas as features esperadas pelo modelo de ML, incluindo as colunas geradas pelo one-hot encoding.
+# É crucial que esta lista seja consistente entre o treinamento e a inferência.
+NOME_DAS_FEATURES_CODIFICADAS_ESPERADAS = [
     'Age','BMI','Height','Weight','Length_of_Stay','Appendix_Diameter','Body_Temperature','WBC_Count',
     'Neutrophil_Percentage','RBC_Count','Hemoglobin','RDW','Thrombocyte_Count','CRP','Alvarado_Score',
     'Paedriatic_Appendicitis_Score','Sex_female','Sex_male','Appendix_on_US_no','Appendix_on_US_yes',
@@ -35,112 +36,106 @@ ENCODED_FEATURES_NAMES = [
     'US_Performed_yes','Free_Fluids_no','Free_Fluids_yes'
 ]
 
-def normalizar_dados(dados: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza features numéricas e aplica one-hot encoding em categóricas."""
-    print("> Normalizando dados (MinMaxScaler e One-Hot Encoding)...")
+def aplicar_escalonamento_e_codificacao(estrutura_dados: pd.DataFrame) -> pd.DataFrame:
+    """
+    Transforma as features do DataFrame:
+    - Escalonamento de métricas quantitativas (MinMaxScaler).
+    - Codificação one-hot de variáveis categóricas.
+    O escalonador treinado é salvo para uso futuro na inferência.
+    """
+    print("> Escalonando métricas quantitativas e codificando variáveis categóricas...")
 
-    # Copia as colunas alvo antes do processamento das features.
-    colunas_target = dados[['Severity', 'Diagnosis', 'Management']].copy()
+    nomes_colunas_alvo = ['Severity', 'Diagnosis', 'Management']
+    valores_alvo_df = estrutura_dados[nomes_colunas_alvo].copy()
     
-    # Identifica colunas categóricas para one-hot encoding.
-    colunas_categoricas_para_dummies = dados.drop(columns=COLUNAS_NUMERICAS + ['Severity', 'Diagnosis', 'Management'], errors='ignore').columns.tolist()
+    categorias_para_codificar = estrutura_dados.drop(columns=CONJUNTO_DE_METRICAS_QUANTITATIVAS + nomes_colunas_alvo, errors='ignore').columns.tolist()
 
-    # Seleciona colunas numéricas existentes.
-    colunas_numericas_existentes_df = dados[[col for col in COLUNAS_NUMERICAS if col in dados.columns]].copy()
+    metricas_quantitativas_presentes = estrutura_dados[[col for col in CONJUNTO_DE_METRICAS_QUANTITATIVAS if col in estrutura_dados.columns]].copy()
 
-    # Cria, treina e salva o normalizador.
-    normalizador = preprocessing.MinMaxScaler()
-    modelo_normalizador = normalizador.fit(colunas_numericas_existentes_df)
+    escalonador = preprocessing.MinMaxScaler()
+    instancia_escalonador_ajustada = escalonador.fit(metricas_quantitativas_presentes)
 
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(NORMALIZER_MODEL_PATH, "wb") as f:
-        dump(modelo_normalizador, f)
-    print(f"Normalizador salvo em: {NORMALIZER_MODEL_PATH}")
-
-    # Normaliza as colunas numéricas.
-    dados_num_normalizados = modelo_normalizador.transform(colunas_numericas_existentes_df)
-    dados_num_normalizados = pd.DataFrame(dados_num_normalizados, columns=colunas_numericas_existentes_df.columns)
-
-    # Aplica one-hot encoding nas colunas categóricas.
-    dados_cat_normalizados = pd.get_dummies(dados[colunas_categoricas_para_dummies], dtype=int)
+    DIRETORIO_MODELOS.mkdir(parents=True, exist_ok=True)
     
-    # Reseta índices para concatenação.
-    dados_num_normalizados.reset_index(drop=True, inplace=True)
-    dados_cat_normalizados.reset_index(drop=True, inplace=True)
-    colunas_target.reset_index(drop=True, inplace=True)
+    with open(CAMINHO_MODELO_ESCALONADOR, "wb") as f:
+        dump(instancia_escalonador_ajustada, f)
+    print(f"Escalonador de métricas salvo em: {CAMINHO_MODELO_ESCALONADOR}")
+
+    metricas_escalonadas = instancia_escalonador_ajustada.transform(metricas_quantitativas_presentes)
+    metricas_escalonadas_df = pd.DataFrame(metricas_escalonadas, columns=metricas_quantitativas_presentes.columns)
+
+    categorias_codificadas_df = pd.get_dummies(estrutura_dados[categorias_para_codificar], dtype=int)
     
-    # Combina features normalizadas e one-hot encoded.
-    dados_features_transformadas = pd.concat([dados_num_normalizados, dados_cat_normalizados], axis=1)
+    metricas_escalonadas_df.reset_index(drop=True, inplace=True)
+    categorias_codificadas_df.reset_index(drop=True, inplace=True)
+    valores_alvo_df.reset_index(drop=True, inplace=True)
+    
+    features_transformadas_completas = pd.concat([metricas_escalonadas_df, categorias_codificadas_df], axis=1)
 
-    # Garante que o DataFrame tenha todas as colunas esperadas pelo modelo.
-    dados_features_completas = pd.DataFrame(columns=ENCODED_FEATURES_NAMES)
-    dados_features_completas = pd.concat([dados_features_completas, dados_features_transformadas], ignore_index=True)
-    dados_features_completas = dados_features_completas.fillna(0)
+    features_para_modelo = pd.DataFrame(columns=NOME_DAS_FEATURES_CODIFICADAS_ESPERADAS)
+    features_para_modelo = pd.concat([features_para_modelo, features_transformadas_completas], ignore_index=True)
+    features_para_modelo = features_para_modelo.fillna(0)
 
-    # Adiciona as colunas alvo de volta.
-    dados_normalizados_final = pd.concat([dados_features_completas, colunas_target], axis=1)
+    conjunto_dados_transformado = pd.concat([features_para_modelo, valores_alvo_df], axis=1)
 
-    print("> Normalização e One-Hot Encoding concluídos.")
-    return dados_normalizados_final
+    print("> Escalonamento e codificação concluídos.")
+    return conjunto_dados_transformado
 
-def normalizar_paciente(paciente: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza uma nova instância de paciente para inferência."""
-    print("> Normalizando dados do paciente para inferência...")
+def preparar_paciente_para_inferencia(dados_paciente_brutos: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepara uma nova instância de paciente para inferência.
+    Aplica o mesmo escalonamento e codificação one-hot usados no treinamento.
+    """
+    print("> Preparando dados do paciente para inferência...")
     try:
-        with open(NORMALIZER_MODEL_PATH, "rb") as f:
-            modelo_normalizador = load(f)
+        with open(CAMINHO_MODELO_ESCALONADOR, "rb") as f:
+            instancia_escalonador_carregada = load(f)
     except FileNotFoundError:
-        print(f"ERRO: Modelo normalizador '{NORMALIZER_MODEL_PATH.name}' não encontrado! Execute o treinamento primeiro para gerar o modelo.")
+        print(f"ERRO: Escalonador de métricas '{CAMINHO_MODELO_ESCALONADOR.name}' não encontrado! Execute o treinamento primeiro para gerá-lo.")
         return None
     except Exception as e:
-        print(f"ERRO ao carregar o normalizador: {e}")
+        print(f"ERRO ao carregar o escalonador para preparação do paciente: {e}")
         return None
 
-    # Separa colunas numéricas e categóricas do paciente.
-    colunas_numericas_paciente = paciente[[col for col in COLUNAS_NUMERICAS if col in paciente.columns]].copy()
-    colunas_categoricas_paciente = paciente.drop(columns=COLUNAS_NUMERICAS, errors='ignore').columns.tolist()
+    metricas_quantitativas_paciente = dados_paciente_brutos[[col for col in CONJUNTO_DE_METRICAS_QUANTITATIVAS if col in dados_paciente_brutos.columns]].copy()
+    categorias_paciente = dados_paciente_brutos.drop(columns=CONJUNTO_DE_METRICAS_QUANTITATIVAS, errors='ignore').columns.tolist()
 
-    # Normaliza dados numéricos do paciente.
-    paciente_num_normalizados = modelo_normalizador.transform(colunas_numericas_paciente)
-    paciente_num_normalizados = pd.DataFrame(paciente_num_normalizados, columns=colunas_numericas_paciente.columns)
+    metricas_paciente_escalonadas = instancia_escalonador_carregada.transform(metricas_quantitativas_paciente)
+    metricas_paciente_escalonadas_df = pd.DataFrame(metricas_paciente_escalonadas, columns=metricas_quantitativas_paciente.columns)
 
-    # Aplica one-hot encoding em dados categóricos do paciente.
-    paciente_cat_normalizados = pd.get_dummies(paciente[colunas_categoricas_paciente], dtype=int)
+    categorias_paciente_codificadas_df = pd.get_dummies(dados_paciente_brutos[categorias_paciente], dtype=int)
     
-    # Combina os dataframes processados do paciente.
-    paciente_normalizado_temp = pd.concat([paciente_num_normalizados, paciente_cat_normalizados], axis=1)
+    paciente_transformado_temp = pd.concat([metricas_paciente_escalonadas_df, categorias_paciente_codificadas_df], axis=1)
 
-    # Garante que as colunas do paciente correspondam ao esperado pelo modelo.
-    paciente_final = pd.DataFrame(columns=ENCODED_FEATURES_NAMES)
-    paciente_final = pd.concat([paciente_final, paciente_normalizado_temp], ignore_index=True)
-    paciente_final = paciente_final.fillna(0)
+    paciente_pronto_para_modelo = pd.DataFrame(columns=NOME_DAS_FEATURES_CODIFICADAS_ESPERADAS)
+    paciente_pronto_para_modelo = pd.concat([paciente_pronto_para_modelo, paciente_transformado_temp], ignore_index=True)
+    paciente_pronto_para_modelo = paciente_pronto_para_modelo.fillna(0)
 
-    return paciente_final[ENCODED_FEATURES_NAMES]
+    return paciente_pronto_para_modelo[NOME_DAS_FEATURES_CODIFICADAS_ESPERADAS]
 
-def desnormalizar_paciente(paciente_normalizado: pd.DataFrame) -> pd.DataFrame:
-    """Desnormaliza as features numéricas de uma instância de paciente."""
-    print("> Desnormalizando dados do paciente para exibição...")
+def reverter_escalonamento_paciente(dados_paciente_escalonados: pd.DataFrame) -> pd.DataFrame:
+    """
+    Reverte o escalonamento das métricas quantitativas de uma instância de paciente.
+    Útil para exibir dados em seu formato original.
+    """
+    print("> Revertendo escalonamento de dados do paciente para exibição...")
     try:
-        with open(NORMALIZER_MODEL_PATH, "rb") as f:
-            modelo_normalizador = load(f)
+        with open(CAMINHO_MODELO_ESCALONADOR, "rb") as f:
+            instancia_escalonador_carregada = load(f)
     except FileNotFoundError:
-        print(f"ERRO: Modelo normalizador '{NORMALIZER_MODEL_PATH.name}' não encontrado!")
-        print("Execute o treinamento para gerar o modelo primeiro.")
+        print(f"ERRO: Escalonador de métricas '{CAMINHO_MODELO_ESCALONADOR.name}' não encontrado! Verifique se o treinamento foi executado.")
         return None
     except Exception as e:
-        print(f"ERRO ao carregar o normalizador para desnormalização: {e}")
+        print(f"ERRO ao carregar o escalonador para reversão: {e}")
         return None
 
-    # Seleciona colunas numéricas para desnormalização.
-    dados_numericos_para_reverter_cols = [col for col in COLUNAS_NUMERICAS if col in paciente_normalizado.columns]
-    dados_numericos_para_reverter = paciente_normalizado[dados_numericos_para_reverter_cols]
+    metricas_quantitativas_para_reverter = [col for col in CONJUNTO_DE_METRICAS_QUANTITATIVAS if col in dados_paciente_escalonados.columns]
+    dados_para_reverter = dados_paciente_escalonados[metricas_quantitativas_para_reverter]
 
-    # Aplica a transformação inversa.
-    dados_desnormalizados = modelo_normalizador.inverse_transform(dados_numericos_para_reverter)
+    dados_desescalonados = instancia_escalonador_carregada.inverse_transform(dados_para_reverter)
 
-    # Converte o resultado de volta para DataFrame.
-    paciente_desnormalizado_df = pd.DataFrame(dados_desnormalizados, 
-                                                columns=dados_numericos_para_reverter_cols, 
-                                                index=paciente_normalizado.index)
+    paciente_com_metricas_originais = pd.DataFrame(dados_desescalonados, 
+                                                columns=metricas_quantitativas_para_reverter, 
+                                                index=dados_paciente_escalonados.index)
 
-    return paciente_desnormalizado_df
+    return paciente_com_metricas_originais

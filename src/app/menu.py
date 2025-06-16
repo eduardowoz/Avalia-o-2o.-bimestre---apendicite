@@ -1,67 +1,71 @@
 # src/app/menu.py
 
-import os # Para limpar a tela
+import os
 
-# Importa as funções dos outros módulos da aplicação
-from app.inference import inferir_paciente
-from app.patient_intake import novo_paciente
+# Importa as funções para a lógica da aplicação de inferência e coleta de dados
+from app.inference import realizar_analise_paciente
+from app.patient_intake import registrar_novo_paciente
 
-# Importa a função principal do pipeline de treinamento
-from training_pipeline.train import executar_pipeline_de_treinamento
+# Importa a função principal para o processo de treinamento dos modelos
+from training_pipeline.train import iniciar_pipeline_de_treinamento
 
-def limpar_tela():
-    """Limpa a tela do terminal."""
-    # Para Windows
+def purificar_terminal():
+    """Limpa o console do terminal para melhor visualização."""
     if os.name == 'nt':
         _ = os.system('cls')
-    # Para Mac e Linux
     else:
         _ = os.system('clear')
 
-def exibir_menu_principal():
-    """Exibe o menu principal e retorna a escolha do usuário."""
-    limpar_tela()
+def exibir_opcoes_principais():
+    """
+    Apresenta o menu de opções para o usuário e coleta sua escolha.
+    Retorna a opção numérica selecionada.
+    """
+    purificar_terminal()
     print("=" * 50)
-    print("   Modelo de Predição de Apendicite Pediátrica")
+    print("   Sistema de Apoio ao Diagnóstico de Apendicite")
     print("=" * 50)
-    print("\nSelecione uma opção:")
-    print("[ 1 ] - Treinar modelos")
-    print("[ 2 ] - Diagnosticar um novo paciente")
-    print("[ 0 ] - Sair")
+    print("\nEscolha uma operação:")
+    print("[ 1 ] - Gerar e treinar modelos de predição")
+    print("[ 2 ] - Inserir dados para análise de um novo paciente")
+    print("[ 0 ] - Encerrar aplicação")
     print("=" * 50)
     
     while True:
-        escolha = input("Sua escolha: ").strip()
-        if escolha.isdigit():
-            return int(escolha)
+        selecao_usuario = input("Sua escolha: ").strip()
+        if selecao_usuario.isdigit():
+            return int(selecao_usuario)
         else:
-            print("Opção inválida. Por favor, digite um número correspondente à opção.")
+            print("Opção inválida. Por favor, digite o número correspondente à sua escolha.")
 
-def menu_principal():
-    """Gerencia o fluxo do menu principal da aplicação."""
+def executar_fluxo_principal():
+    """
+    Controla o fluxo de navegação do menu da aplicação.
+    Direciona para as funcionalidades de treinamento ou análise de paciente.
+    """
     while True:
-        escolha = exibir_menu_principal()
+        opcao_selecionada = exibir_opcoes_principais()
 
-        if escolha == 1:
-            limpar_tela()
-            executar_pipeline_de_treinamento()
-            input("\nPressione ENTER para voltar ao menu principal...")
-        elif escolha == 2:
-            paciente = novo_paciente() # Coleta os dados do paciente
-            if paciente is not None: # Se a coleta não foi cancelada
-                limpar_tela()
+        if opcao_selecionada == 1:
+            purificar_terminal()
+            iniciar_pipeline_de_treinamento()
+            input("\nPressione ENTER para retornar ao menu principal...")
+        elif opcao_selecionada == 2:
+            dados_paciente_processados = registrar_novo_paciente()
+            if dados_paciente_processados is not None:
+                purificar_terminal()
                 print("=" * 50)
-                print("      Resultado da Análise do Paciente")
+                print("      Relatório de Análise do Paciente")
                 print("=" * 50)
-                inferir_paciente(paciente) # Roda a inferência
+                realizar_analise_paciente(dados_paciente_processados)
                 print("\n" + "=" * 50)
-                input("\nPressione ENTER para voltar ao menu principal...")
-            else: # Se a coleta foi cancelada
-                input("\nColeta de dados cancelada. Pressione ENTER para voltar...")
-        elif escolha == 0:
-            print("\nEncerrando o programa...")
+                input("\nPressione ENTER para retornar ao menu principal...")
+            else:
+                input("\nOperação cancelada. Pressione ENTER para retornar ao menu...")
+        elif opcao_selecionada == 0:
+            print("\nEncerrando a aplicação. Obrigado(a)!")
             break
         else:
-            limpar_tela()
-            print("Opção inválida. Tente novamente.")
+            purificar_terminal()
+            print("Opção não reconhecida. Por favor, tente novamente.")
             input("\nPressione ENTER para continuar...")

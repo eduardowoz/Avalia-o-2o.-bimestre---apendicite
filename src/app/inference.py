@@ -6,20 +6,20 @@ from pathlib import Path
 from colorama import init, Fore, Style
 import pandas as pd
 
-# Importa funções para desnormalização de dados
-from data_pipeline.normalization import desnormalizar_paciente
+# Importa funções para manipulação de dados transformados
+from data_pipeline.normalization import reverter_escalonamento_paciente
 
-# Inicializa o colorama para formatação de texto no terminal.
+# Inicializa o colorama para efeitos visuais no terminal.
 init()
 
-# Define caminhos para diretórios e arquivos.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-DATA_DIR = PROJECT_ROOT / "data"
-CSV_PATH = DATA_DIR / "pacientes_inferidos.csv"
+# Define os caminhos essenciais para o sistema.
+DIRETORIO_RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
+DIRETORIO_MODELOS = DIRETORIO_RAIZ_PROJETO / "models"
+DIRETORIO_DADOS_SALVOS = DIRETORIO_RAIZ_PROJETO / "data"
+CAMINHO_REGISTRO_PACIENTES = DIRETORIO_DADOS_SALVOS / "registro_pacientes_analisados.csv"
 
-# Lista de features esperadas pelo modelo após pré-processamento.
-ENCODED_FEATURES_NAMES = [
+# Lista de identificadores de features no formato pós-processamento.
+LISTA_DE_FEATURES_PROCESSADAS = [
     'Age','BMI','Height','Weight','Length_of_Stay','Appendix_Diameter','Body_Temperature','WBC_Count',
     'Neutrophil_Percentage','RBC_Count','Hemoglobin','RDW','Thrombocyte_Count','CRP','Alvarado_Score',
     'Paedriatic_Appendicitis_Score','Sex_female','Sex_male','Appendix_on_US_no','Appendix_on_US_yes',
@@ -36,8 +36,8 @@ ENCODED_FEATURES_NAMES = [
     'US_Performed_yes','Free_Fluids_no','Free_Fluids_yes'
 ]
 
-# Lista de colunas originais a serem mantidas no arquivo CSV de saída.
-ORIGINAL_COLUMNS_TO_KEEP = [
+# Colunas originais a serem mantidas no registro final do paciente.
+COLUNAS_PARA_REGISTRO_ORIGINAL = [
     'Age','BMI','Sex','Height','Weight','Length_of_Stay','Alvarado_Score','Paedriatic_Appendicitis_Score',
     'Appendix_on_US','Appendix_Diameter','Migratory_Pain','Lower_Right_Abd_Pain',
     'Contralateral_Rebound_Tenderness','Coughing_Pain','Nausea','Loss_of_Appetite','Body_Temperature',
@@ -46,19 +46,18 @@ ORIGINAL_COLUMNS_TO_KEEP = [
     'Ipsilateral_Rebound_Tenderness','US_Performed','Free_Fluids'
 ]
 
-# Nomes das colunas de resultado da inferência.
-RESULT_NAMES = ['Diagnosis', 'Severity', 'Management']
+# Nomes dos resultados fornecidos pelos modelos.
+NOMES_DOS_RESULTADOS_PREDITOS = ['Diagnosis', 'Severity', 'Management']
 
-# Cabeçalho completo para o arquivo CSV de saída.
-FINAL_CSV_HEADERS = ORIGINAL_COLUMNS_TO_KEEP + RESULT_NAMES
+# Cabeçalho completo para o arquivo de registro CSV.
+CABECALHO_CSV_FINAL = COLUNAS_PARA_REGISTRO_ORIGINAL + NOMES_DOS_RESULTADOS_PREDITOS
 
 
-def reverter_one_hot_encoding(paciente_encoded_data_series: pd.Series) -> dict:
-    """Reverte dados one-hot encoded para o formato original."""
-    dados_revertidos = {}
+def reverter_codificacao_categorica(dados_codificados_series: pd.Series) -> dict:
+    """Reverte dados one-hot encoded de volta para o formato categórico original."""
+    dados_recuperados = {}
 
-    # Mapeamento para reverter colunas específicas.
-    mapa_reversao = {
+    mapa_para_reverter = {
         'Sex': {'prefixo': 'Sex_', 'valores': ['female', 'male']},
         'Appendix_on_US': {'prefixo': 'Appendix_on_US_', 'valores': ['no', 'yes']},
         'Migratory_Pain': {'prefixo': 'Migratory_Pain_', 'valores': ['no', 'yes']},
@@ -80,149 +79,150 @@ def reverter_one_hot_encoding(paciente_encoded_data_series: pd.Series) -> dict:
         'Free_Fluids': {'prefixo': 'Free_Fluids_', 'valores': ['no', 'yes']},
     }
 
-    # Processa cada coluna para reverter o encoding.
-    for col_original in ORIGINAL_COLUMNS_TO_KEEP:
-        if col_original in mapa_reversao:
-            info = mapa_reversao[col_original]
-            found_value = False
-            for valor_original in info['valores']:
-                coluna_codificada = f"{info['prefixo']}{valor_original}"
-                if coluna_codificada in paciente_encoded_data_series.index and paciente_encoded_data_series.get(coluna_codificada) == 1:
-                    dados_revertidos[col_original] = valor_original
-                    found_value = True
+    for coluna_base in COLUNAS_PARA_REGISTRO_ORIGINAL:
+        if coluna_base in mapa_para_reverter:
+            info_reversao = mapa_para_reverter[coluna_base]
+            valor_encontrado = False
+            for valor_original_map in info_reversao['valores']:
+                coluna_one_hot = f"{info_reversao['prefixo']}{valor_original_map}"
+                if coluna_one_hot in dados_codificados_series.index and dados_codificados_series.get(coluna_one_hot) == 1:
+                    dados_recuperados[coluna_base] = valor_original_map
+                    valor_encontrado = True
                     break
-            if not found_value:
-                dados_revertidos[col_original] = 'N/A'
+            if not valor_encontrado:
+                dados_recuperados[coluna_base] = 'N/A'
         else:
-            if col_original in paciente_encoded_data_series.index:
-                dados_revertidos[col_original] = paciente_encoded_data_series[col_original]
+            if coluna_base in dados_codificados_series.index:
+                dados_recuperados[coluna_base] = dados_codificados_series[coluna_base]
             else:
-                dados_revertidos[col_original] = 'N/A'
+                dados_recuperados[coluna_base] = 'N/A'
             
-    return dados_revertidos
+    return dados_recuperados
 
-def inferir_target(paciente_df: pd.DataFrame, target: str):
+def carregar_e_inferir_modelo(dados_paciente_processados: pd.DataFrame, alvo_predicao: str):
     """
-    Carrega um modelo e faz a predição de probabilidade para um target.
-    Retorna as probabilidades ou None em caso de erro.
+    Carrega um modelo de aprendizado de máquina e realiza a predição de probabilidades.
+    Retorna as probabilidades preditas ou None se o modelo não for acessível.
     """
-    model_path = MODELS_DIR / f"pediactric_appendicitis_{target}_model.pkl"
+    caminho_modelo_preditor = DIRETORIO_MODELOS / f"modelo_apendicite_pediatrica_{alvo_predicao.lower()}.pkl"
     try:
-        with open(model_path, "rb") as f:
-            model = load(f)
-            return model.predict_proba(paciente_df)
+        with open(caminho_modelo_preditor, "rb") as f:
+            modelo_preditor = load(f)
+            return modelo_preditor.predict_proba(dados_paciente_processados)
     except FileNotFoundError:
-        print(f"{Fore.RED}ERRO: Modelo '{model_path.name}' não encontrado! Execute o treinamento primeiro.{Style.RESET_ALL}")
+        print(f"{Fore.RED}ERRO: Modelo '{caminho_modelo_preditor.name}' não encontrado! Verifique se o treinamento foi executado.{Style.RESET_ALL}")
         return None
     except Exception as e:
-        print(f"{Fore.RED}ERRO ao carregar ou usar o modelo '{model_path.name}': {e}{Style.RESET_ALL}")
+        print(f"{Fore.RED}ERRO ao carregar ou usar o modelo '{caminho_modelo_preditor.name}': {e}{Style.RESET_ALL}")
         return None
 
-def salvar_inferencia_csv(dados_dict: dict):
-    """Salva os dados do paciente e resultados da inferência em um arquivo CSV."""
+def registrar_dados_analisados(registro_dict: dict):
+    """
+    Salva os dados do paciente, incluindo os resultados das análises, em um arquivo CSV.
+    """
     try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        escrever_cabecalho = not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0
+        DIRETORIO_DADOS_SALVOS.mkdir(parents=True, exist_ok=True)
+        escrever_cabecalho = not CAMINHO_REGISTRO_PACIENTES.exists() or CAMINHO_REGISTRO_PACIENTES.stat().st_size == 0
 
-        with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=FINAL_CSV_HEADERS)
+        with open(CAMINHO_REGISTRO_PACIENTES, "a", newline="", encoding="utf-8") as f:
+            escritor_csv = csv.DictWriter(f, fieldnames=CABECALHO_CSV_FINAL)
             if escrever_cabecalho:
-                writer.writeheader()
+                escritor_csv.writeheader()
             
-            row_to_write = {col: dados_dict.get(col, '') for col in FINAL_CSV_HEADERS}
-            writer.writerow(row_to_write)
-        print(f"\n{Fore.CYAN}--- Inferência salva em '{CSV_PATH.name}' ---{Style.RESET_ALL}")
+            linha_para_escrita = {col: registro_dict.get(col, '') for col in CABECALHO_CSV_FINAL}
+            escritor_csv.writerow(linha_para_escrita)
+        print(f"\n{Fore.CYAN}--- Análise registrada em '{CAMINHO_REGISTRO_PACIENTES.name}' ---{Style.RESET_ALL}")
             
     except IOError as e:
-        print(f"{Fore.RED}ERRO AO SALVAR CSV: {e}{Style.RESET_ALL}")
+        print(f"{Fore.RED}ERRO AO REGISTRAR ANÁLISE EM CSV: {e}{Style.RESET_ALL}")
 
-def inferir_paciente(paciente_normalizado_df: pd.DataFrame):
+def realizar_analise_paciente(paciente_preparado_df: pd.DataFrame):
     """
-    Executa o processo de inferência completo para um paciente.
-    Realiza previsões para diagnóstico, gravidade e tratamento.
+    Conduz o processo completo de análise para um paciente,
+    fornecendo diagnóstico, severidade e sugestão de manejo.
     """
-    # Desnormaliza dados numéricos e reverte one-hot encoding para exibição/salvamento.
-    paciente_original_representation = paciente_normalizado_df.iloc[0].copy()
+    representacao_original_paciente = paciente_preparado_df.iloc[0].copy()
     
-    dados_para_salvar = reverter_one_hot_encoding(paciente_original_representation)
+    dados_para_registro = reverter_codificacao_categorica(representacao_original_paciente)
     
-    dados_desnormalizados_num = desnormalizar_paciente(paciente_normalizado_df)
-    if dados_desnormalizados_num is not None:
-        for col in dados_desnormalizados_num.columns:
-            dados_para_salvar[col] = dados_desnormalizados_num[col].iloc[0]
+    dados_metricas_originais = reverter_escalonamento_paciente(paciente_preparado_df)
+    if dados_metricas_originais is not None:
+        for coluna_metrica in dados_metricas_originais.columns:
+            dados_para_registro[coluna_metrica] = dados_metricas_originais[coluna_metrica].iloc[0]
 
-    # Processa o diagnóstico.
-    print(f"\n{Fore.YELLOW}{Style.BRIGHT}=========== DIAGNÓSTICO DE APENDICITE ==========={Style.RESET_ALL}")
-    diagnostico_proba = inferir_target(paciente_normalizado_df, 'Diagnosis')
-    if diagnostico_proba is None: 
-        dados_para_salvar['Diagnosis'] = 'ERRO'
-        dados_para_salvar['Severity'] = 'ERRO'
-        dados_para_salvar['Management'] = 'ERRO'
-        salvar_inferencia_csv(dados_para_salvar)
+    # Predição de Diagnóstico.
+    print(f"\n{Fore.YELLOW}{Style.BRIGHT}=========== PREDITOR DE DIAGNÓSTICO ==========={Style.RESET_ALL}")
+    probabilidades_diagnostico = carregar_e_inferir_modelo(paciente_preparado_df, 'Diagnosis')
+    if probabilidades_diagnostico is None: 
+        dados_para_registro['Diagnosis'] = 'ERRO'
+        dados_para_registro['Severity'] = 'ERRO'
+        dados_para_registro['Management'] = 'ERRO'
+        registrar_dados_analisados(dados_para_registro)
         return
     
-    with open(MODELS_DIR / 'pediactric_appendicitis_Diagnosis_model.pkl', "rb") as f:
-        model_diagnosis = load(f)
-    diag_pred_class = model_diagnosis.predict(paciente_normalizado_df)[0]
+    with open(DIRETORIO_MODELOS / 'modelo_apendicite_pediatrica_diagnosis.pkl', "rb") as f:
+        modelo_diagnostico = load(f)
+    classe_diagnostico_predita = modelo_diagnostico.predict(paciente_preparado_df)[0]
     
-    diag_proba_list = diagnostico_proba[0]
-    diag_classes = model_diagnosis.classes_
+    lista_prob_diagnostico = probabilidades_diagnostico[0]
+    classes_do_modelo_diagnostico = modelo_diagnostico.classes_
     
-    prob_predita = diag_proba_list[list(diag_classes).index(diag_pred_class)]
+    prob_da_predicao = lista_prob_diagnostico[list(classes_do_modelo_diagnostico).index(classe_diagnostico_predita)]
 
-    dados_para_salvar['Diagnosis'] = diag_pred_class
+    dados_para_registro['Diagnosis'] = classe_diagnostico_predita
     
-    dados_para_salvar['Severity'] = 'N/A'
-    dados_para_salvar['Management'] = 'N/A'
+    dados_para_registro['Severity'] = 'N/A'
+    dados_para_registro['Management'] = 'N/A'
 
-    if diag_pred_class == 'appendicitis':
-        print(f"{Fore.GREEN}Resultado: {prob_predita:.2%} de chance - {dados_para_salvar['Diagnosis']}{Style.RESET_ALL}")
+    if classe_diagnostico_predita == 'appendicitis':
+        print(f"{Fore.GREEN}Resultado: {prob_da_predicao:.2%} de chance - {dados_para_registro['Diagnosis']}{Style.RESET_ALL}")
 
-        # Processa a gravidade, se houver apendicite.
-        print(f"\n{Fore.YELLOW}{Style.BRIGHT}=== GRAVIDADE DA APENDICITE ==={Style.RESET_ALL}")
-        severity_proba = inferir_target(paciente_normalizado_df, 'Severity')
+        # Predição de Severidade (somente se diagnóstico for apendicite).
+        print(f"\n{Fore.YELLOW}{Style.BRIGHT}=== PREDITOR DE SEVERIDADE ==={Style.RESET_ALL}")
+        probabilidades_severidade = carregar_e_inferir_modelo(paciente_preparado_df, 'Severity')
         
-        if severity_proba is not None:
-            with open(MODELS_DIR / 'pediactric_appendicitis_Severity_model.pkl', "rb") as f:
-                model_severity = load(f)
-            sev_pred_class = model_severity.predict(paciente_normalizado_df)[0]
-            sev_proba_list = severity_proba[0]
-            sev_classes = model_severity.classes_
-            prob_sev_predita = sev_proba_list[list(sev_classes).index(sev_pred_class)]
+        if probabilidades_severidade is not None:
+            with open(DIRETORIO_MODELOS / 'modelo_apendicite_pediatrica_severity.pkl', "rb") as f:
+                modelo_severidade = load(f)
+            classe_severidade_predita = modelo_severidade.predict(paciente_preparado_df)[0]
+            lista_prob_severidade = probabilidades_severidade[0]
+            classes_do_modelo_severidade = modelo_severidade.classes_
+            prob_da_predicao_severidade = lista_prob_severidade[list(classes_do_modelo_severidade).index(classe_severidade_predita)]
 
-            dados_para_salvar['Severity'] = sev_pred_class
+            dados_para_registro['Severity'] = classe_severidade_predita
             
-            if sev_pred_class == 'complicated':
-                print(f"{Fore.RED}Resultado: {prob_sev_predita:.2%} de chance - {sev_pred_class}{Style.RESET_ALL}")
+            if classe_severidade_predita == 'complicated':
+                print(f"{Fore.RED}Resultado: {prob_da_predicao_severidade:.2%} de chance - {classe_severidade_predita}{Style.RESET_ALL}")
             else:
-                print(f"{Fore.GREEN}Resultado: {prob_sev_predita:.2%} de chance - {sev_pred_class}{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}Resultado: {prob_da_predicao_severidade:.2%} de chance - {classe_severidade_predita}{Style.RESET_ALL}")
 
-        # Processa o tratamento, se houver apendicite.
-        print(f"\n{Fore.YELLOW}{Style.BRIGHT}=== TRATAMENTO RECOMENDADO ==={Style.RESET_ALL}")
-        management_proba = inferir_target(paciente_normalizado_df, 'Management')
+        # Sugestão de Manejo (somente se diagnóstico for apendicite).
+        print(f"\n{Fore.YELLOW}{Style.BRIGHT}=== SUGESTOR DE MANEJO ==={Style.RESET_ALL}")
+        probabilidades_manejo = carregar_e_inferir_modelo(paciente_preparado_df, 'Management')
         
-        if management_proba is not None:
-            with open(MODELS_DIR / 'pediactric_appendicitis_Management_model.pkl', "rb") as f:
-                model_management = load(f)
-            mgmt_pred_class = model_management.predict(paciente_normalizado_df)[0]
-            mgmt_proba_list = management_proba[0]
-            mgmt_classes = model_management.classes_
-            prob_mgmt_predita = mgmt_proba_list[list(mgmt_classes).index(mgmt_pred_class)]
+        if probabilidades_manejo is not None:
+            with open(DIRETORIO_MODELOS / 'modelo_apendicite_pediatrica_management.pkl', "rb") as f:
+                modelo_manejo = load(f)
+            classe_manejo_predita = modelo_manejo.predict(paciente_preparado_df)[0]
+            lista_prob_manejo = probabilidades_manejo[0]
+            classes_do_modelo_manejo = modelo_manejo.classes_
+            prob_da_predicao_manejo = lista_prob_manejo[list(classes_do_modelo_manejo).index(classe_manejo_predita)]
 
-            dados_para_salvar['Management'] = mgmt_pred_class
+            dados_para_registro['Management'] = classe_manejo_predita
             
-            if mgmt_pred_class == 'conservative':
-                print(f"{Fore.BLUE}Resultado: {prob_mgmt_predita:.2%} de chance - {mgmt_pred_class}{Style.RESET_ALL}")
+            if classe_manejo_predita == 'conservative':
+                print(f"{Fore.BLUE}Resultado: {prob_da_predicao_manejo:.2%} de chance - {classe_manejo_predita}{Style.RESET_ALL}")
             else:
-                print(f"{Fore.MAGENTA}Resultado: {prob_mgmt_predita:.2%} de chance - {mgmt_pred_class}{Style.RESET_ALL}")
+                print(f"{Fore.MAGENTA}Resultado: {prob_da_predicao_manejo:.2%} de chance - {classe_manejo_predita}{Style.RESET_ALL}")
 
-    else: # Se o diagnóstico não for apendicite.
-        model_diagnosis = load(MODELS_DIR / 'pediactric_appendicitis_Diagnosis_model.pkl')
-        diag_proba_list = diagnostico_proba[0]
-        diag_classes = model_diagnosis.classes_
+    else:
+        with open(DIRETORIO_MODELOS / 'modelo_apendicite_pediatrica_diagnosis.pkl', "rb") as f:
+            modelo_diagnostico = load(f)
+        lista_prob_diagnostico = probabilidades_diagnostico[0]
+        classes_do_modelo_diagnostico = modelo_diagnostico.classes_
         
-        prob_no_appendicitis = diag_proba_list[list(diag_classes).index('no appendicitis')]
+        prob_nao_apendicite = lista_prob_diagnostico[list(classes_do_modelo_diagnostico).index('no appendicitis')]
         
-        print(f"{Fore.RED}Resultado: {prob_no_appendicitis:.2%} de chance - {dados_para_salvar['Diagnosis']}{Style.RESET_ALL}")
+        print(f"{Fore.RED}Resultado: {prob_nao_apendicite:.2%} de chance - {dados_para_registro['Diagnosis']}{Style.RESET_ALL}")
 
-    salvar_inferencia_csv(dados_para_salvar)
+    registrar_dados_analisados(dados_para_registro)

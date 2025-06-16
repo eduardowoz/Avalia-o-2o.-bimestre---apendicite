@@ -1,7 +1,7 @@
 # src/main.py
 
-# Importa a função principal do menu para iniciar a aplicação
-from app.menu import menu_principal
+# Importa a função principal de controle do fluxo da aplicação
+from app.menu import executar_fluxo_principal
 
 if __name__ == "__main__":
-    menu_principal()
+    executar_fluxo_principal()

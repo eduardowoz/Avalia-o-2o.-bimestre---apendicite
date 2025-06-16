@@ -3,43 +3,40 @@
 import pandas as pd
 from imblearn.over_sampling import SMOTE
 
-def balancear(dados: pd.DataFrame, coluna_target: str) -> pd.DataFrame:
+def ajustar_desbalanceamento_classes(conjunto_de_dados: pd.DataFrame, identificador_alvo: str) -> pd.DataFrame:
     """
-    Realiza oversampling em uma coluna alvo usando SMOTE.
+    Realiza oversampling (aumento de amostras da classe minoritária) em uma coluna alvo.
+    Utiliza a técnica SMOTE para sintetizar novas amostras.
     """
-    print(f"> Balanceando dados para a coluna '{coluna_target}'...")
+    print(f"> Balanceando dados para o identificador alvo: '{identificador_alvo}'...")
 
-    # Define classes a serem removidas para o balanceamento de 'Management'.
-    if coluna_target == 'Management':
-        classes_para_remover = ['secondary surgical', 'simultaneous appendectomy']
+    if identificador_alvo == 'Management':
+        opcoes_de_manejo_a_excluir = ['secondary surgical', 'simultaneous appendectomy']
         
-        if 'Management' in dados.columns:
-            indices_para_remover = dados[dados['Management'].isin(classes_para_remover)].index
-            dados_filtrados = dados.drop(indices_para_remover)
-            print(f"  Removidas {len(indices_para_remover)} linhas para o balanceamento de 'Management' (classes: {classes_para_remover}).")
+        if 'Management' in conjunto_de_dados.columns:
+            indices_para_descarte = conjunto_de_dados[conjunto_de_dados['Management'].isin(opcoes_de_manejo_a_excluir)].index
+            estrutura_dados_filtrada = conjunto_de_dados.drop(indices_para_descarte)
+            print(f"  Descartadas {len(indices_para_descarte)} linhas para balanceamento de 'Management' (opções: {opcoes_de_manejo_a_excluir}).")
         else:
-            dados_filtrados = dados.copy()
-            print(f"  Aviso: Coluna 'Management' não encontrada, não foi possível filtrar classes.")
+            estrutura_dados_filtrada = conjunto_de_dados.copy()
+            print(f"  Aviso: Identificador alvo 'Management' não encontrado, filtragem de opções ignorada.")
     else:
-        dados_filtrados = dados.copy()
+        estrutura_dados_filtrada = conjunto_de_dados.copy()
 
-    # Separa features e a coluna alvo.
-    colunas_target_outras = ['Diagnosis', 'Severity', 'Management']
-    colunas_a_ignorar_features = [col for col in colunas_target_outras if col != coluna_target]
+    outros_identificadores_alvo = ['Diagnosis', 'Severity', 'Management']
+    colunas_a_ignorar_nas_features = [col for col in outros_identificadores_alvo if col != identificador_alvo]
     
-    dados_atributos = dados_filtrados.drop(columns=colunas_a_ignorar_features + [coluna_target], errors='ignore')
-    dados_classes = dados_filtrados[coluna_target]
+    atributos_para_balancear = estrutura_dados_filtrada.drop(columns=colunas_a_ignorar_nas_features + [identificador_alvo], errors='ignore')
+    classes_para_balancear = estrutura_dados_filtrada[identificador_alvo]
 
-    # Aplica o SMOTE para balanceamento.
-    resampler = SMOTE(random_state=42)
-    dados_atributos_b, dados_classes_b = resampler.fit_resample(dados_atributos, dados_classes)
+    instancia_reamostrador = SMOTE(random_state=42)
+    atributos_reamostrados, classes_reamostradas = instancia_reamostrador.fit_resample(atributos_para_balancear, classes_para_balancear)
 
-    # Recompõe o DataFrame balanceado.
-    dados_atributos_b.reset_index(drop=True, inplace=True)
-    dados_classes_b.reset_index(drop=True, inplace=True)
-    dados_final = pd.concat([dados_atributos_b, dados_classes_b], axis=1)
+    atributos_reamostrados.reset_index(drop=True, inplace=True)
+    classes_reamostradas.reset_index(drop=True, inplace=True)
+    dados_reamostrados_final = pd.concat([atributos_reamostrados, classes_reamostradas], axis=1)
 
-    print(f"> Balanceamento para '{coluna_target}' concluído. Nova distribuição de classes:")
-    print(dados_final[coluna_target].value_counts())
+    print(f"> Balanceamento para '{identificador_alvo}' concluído. Nova distribuição de classes:")
+    print(dados_reamostrados_final[identificador_alvo].value_counts())
     
-    return dados_final
+    return dados_reamostrados_final

@@ -4,47 +4,43 @@ import pandas as pd
 from pathlib import Path
 from pickle import dump, load
 
-# Importa funções para processamento de dados
-from data_pipeline.processing import importar_dataset, preprocessar_dados
-from data_pipeline.normalization import normalizar_dados, ENCODED_FEATURES_NAMES
-from data_pipeline.balancing import balancear
+# Importa módulos de preparação e tratamento de dados
+from data_pipeline.processing import obter_conjunto_de_dados_brutos, preparar_dados_para_analise
+from data_pipeline.normalization import aplicar_escalonamento_e_codificacao, NOME_DAS_FEATURES_CODIFICADAS_ESPERADAS
+from data_pipeline.balancing import ajustar_desbalanceamento_classes
 
-# Importa ferramentas para treinamento de modelos
+# Importa algoritmos e ferramentas de avaliação para modelos de aprendizado de máquina
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, cross_validate
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-# Define o caminho para a pasta onde os modelos serão salvos
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-MODELS_DIR.mkdir(exist_ok=True, parents=True)
+# Define o diretório para armazenar os modelos treinados
+DIRETORIO_RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
+DIRETORIO_MODELOS = DIRETORIO_RAIZ_PROJETO / "models"
+DIRETORIO_MODELOS.mkdir(exist_ok=True, parents=True)
 
-def treinar_modelo_individual(dados: pd.DataFrame, target: str):
+def treinar_e_persistir_modelo(dados_para_treino: pd.DataFrame, identificador_alvo: str):
     """
-    Treina e avalia um modelo RandomForest para um target específico.
-    Salva o modelo treinado.
+    Treina um modelo RandomForest para um alvo específico, otimiza hiperparâmetros
+    e avalia seu desempenho. O modelo treinado é salvo em disco.
     """
-    print(f"\n> Treinando modelo para a coluna target: {target}")
+    print(f"\n> Iniciando treinamento para o alvo: {identificador_alvo}")
 
-    model_path = MODELS_DIR / f'pediactric_appendicitis_{target}_model.pkl'
+    caminho_do_modelo = DIRETORIO_MODELOS / f'modelo_apendicite_pediatrica_{identificador_alvo.lower()}.pkl'
 
-    # Verifica se o modelo já existe e pula o treinamento se encontrado.
-    if model_path.exists():
-        print(f"Modelo para {target} já existe em {model_path}. Pulando treinamento.")
+    if caminho_do_modelo.exists():
+        print(f"Modelo para {identificador_alvo} já existe em {caminho_do_modelo}. Treinamento ignorado.")
         return
 
-    # Separa as features da coluna target.
-    colunas_target = ['Diagnosis', 'Severity', 'Management']
-    features_cols = [col for col in dados.columns if col not in colunas_target]
+    colunas_dos_alvos = ['Diagnosis', 'Severity', 'Management']
+    colunas_dos_atributos = [col for col in dados_para_treino.columns if col not in colunas_dos_alvos]
     
-    dados_atributos = dados[features_cols].copy()
-    dados_classes = dados[target].copy()
+    conjunto_atributos = dados_para_treino[colunas_dos_atributos].copy()
+    conjunto_classes = dados_para_treino[identificador_alvo].copy()
 
-    # Configura o modelo base.
-    tree = RandomForestClassifier(random_state=42)
+    estimador_base = RandomForestClassifier(random_state=42)
 
-    # Define os hiperparâmetros para otimização do modelo.
-    tree_grid = {
+    grade_de_parametros = {
         'n_estimators': [100, 200],
         'criterion': ['gini', 'entropy'],
         'max_depth': [None, 10, 20],
@@ -55,98 +51,75 @@ def treinar_modelo_individual(dados: pd.DataFrame, target: str):
         'class_weight': ['balanced', None]
     }
 
-    # Realiza a busca em grade para encontrar os melhores hiperparâmetros.
-    print(f"> Realizando otimização de hiperparâmetros para {target}...")
-    tree_hyperparameters = GridSearchCV(
-        estimator=tree,
-        param_grid=tree_grid,
+    print(f"> Otimizando hiperparâmetros para {identificador_alvo} com busca em grade...")
+    busca_otimizada_parametros = GridSearchCV(
+        estimator=estimador_base,
+        param_grid=grade_de_parametros,
         cv=5,
         verbose=1,
         n_jobs=-1,
         scoring='accuracy'
     )
     
-    tree_hyperparameters.fit(dados_atributos, dados_classes)
+    busca_otimizada_parametros.fit(conjunto_atributos, conjunto_classes)
     
-    print(f"\nMelhores parâmetros para {target}:")
-    print(tree_hyperparameters.best_params_)
+    print(f"\nMelhores parâmetros para {identificador_alvo}:")
+    print(busca_otimizada_parametros.best_params_)
 
-    # Treina o modelo final com os melhores parâmetros em todo o dataset.
-    print(f"> Treinando o modelo final para {target} com os melhores parâmetros...")
-    model_final = RandomForestClassifier(**tree_hyperparameters.best_params_, random_state=42)
-    model_final.fit(dados_atributos, dados_classes)
+    print(f"> Treinando o modelo final para {identificador_alvo} com parâmetros otimizados...")
+    modelo_final_treinado = RandomForestClassifier(**busca_otimizada_parametros.best_params_, random_state=42)
+    modelo_final_treinado.fit(conjunto_atributos, conjunto_classes)
 
-    # Avalia o modelo usando validação cruzada.
-    scoring_metrics = ['accuracy', 'precision_macro', 'recall_macro', 'f1_macro']
-    print(f"> Avaliando o modelo de {target} com validação cruzada (10 folds)...")
-    scores_cross = cross_validate(model_final, dados_atributos, dados_classes, cv=10, scoring=scoring_metrics, n_jobs=-1)
+    metricas_para_avaliacao = ['accuracy', 'precision_macro', 'recall_macro', 'f1_macro']
+    print(f"> Avaliando o desempenho do modelo de {identificador_alvo} com validação cruzada (10 folds)...")
+    resultados_validacao_cruzada = cross_validate(modelo_final_treinado, conjunto_atributos, conjunto_classes, cv=10, scoring=metricas_para_avaliacao, n_jobs=-1)
 
-    print(f"\n--- Resultados da validação cruzada (Target: {target}) ---")
-    print(f"  Acurácia média:   {scores_cross['test_accuracy'].mean():.2%}")
-    print(f"  Precisão média:   {scores_cross['test_precision_macro'].mean():.2%}")
-    print(f"  Recall médio:     {scores_cross['test_recall_macro'].mean():.2%}")
-    print(f"  F1-score médio:   {scores_cross['test_f1_macro'].mean():.2%}")
+    print(f"\n--- Resultados da Validação Cruzada (Alvo: {identificador_alvo}) ---")
+    print(f"  Acurácia média:   {resultados_validacao_cruzada['test_accuracy'].mean():.2%}")
+    print(f"  Precisão média:   {resultados_validacao_cruzada['test_precision_macro'].mean():.2%}")
+    print(f"  Recall médio:     {resultados_validacao_cruzada['test_recall_macro'].mean():.2%}")
+    print(f"  F1-score médio:   {resultados_validacao_cruzada['test_f1_macro'].mean():.2%}")
     print("-" * 40)
 
-    # Salva o modelo treinado em um arquivo.
-    dump(model_final, open(model_path, "wb"))
-    print(f"> Modelo para {target} salvo em {model_path}")
+    dump(modelo_final_treinado, open(caminho_do_modelo, "wb"))
+    print(f"> Modelo para {identificador_alvo} salvo em {caminho_do_modelo}")
 
 
-def executar_pipeline_de_treinamento():
+def iniciar_pipeline_de_treinamento():
     """
-    Executa o pipeline completo de treinamento de modelos.
-    Inclui importação, pré-processamento, normalização, balanceamento
-    e treinamento de modelos para cada target.
+    Orquestra o pipeline completo de preparação de dados e treinamento de modelos.
+    As etapas incluem aquisição, pré-processamento, normalização, balanceamento
+    e persistência dos modelos treinados para os alvos Diagnosis, Severity e Management.
     """
     print("==================================================")
-    print(">>> Iniciando Pipeline de Treinamento de Modelos <<<")
+    print(">>> Iniciando Pipeline de Geração de Modelos <<<")
     print("==================================================")
     
-    # Importa o dataset.
-    dados_raw = importar_dataset()
-    if dados_raw is None:
-        print("Pipeline de treinamento interrompido devido a erro na importação do dataset.")
+    dados_iniciais = obter_conjunto_de_dados_brutos()
+    if dados_iniciais is None:
+        print("Processo de treinamento interrompido devido a falha na aquisição dos dados.")
         return
-#==============================================================================================================================    
-    # --- INÍCIO DA DEPURAÇÃO ---
-    print("\n--- INFORMAÇÕES DO DATAFRAME APÓS IMPORTAÇÃO ---")
-    print("Colunas presentes no dados_raw:", dados_raw.columns.tolist())
-    print("Primeiras 5 linhas do dados_raw:\n", dados_raw.head())
-    print("Verificando nulos nas colunas alvo no dados_raw:\n", dados_raw[['Severity', 'Diagnosis', 'Management']].isnull().sum())
-    print("--- FIM DA DEPURAÇÃO ---")
-    # --- FIM DA DEPURAÇÃO ---
 
-    # 2. Pré-processar os dados
-    dados_processados = preprocessar_dados(dados_raw.copy())
+    dados_preparados = preparar_dados_para_analise(dados_iniciais.copy())
 
-    # Pré-processa os dados brutos.
-    dados_processados = preprocessar_dados(dados_raw.copy())
+    dados_transformados = aplicar_escalonamento_e_codificacao(dados_preparados.copy())
+    print("> Dados preparados e transformados com sucesso.")
 
-    # Normaliza os dados, aplicando escalonamento e one-hot encoding.
-    dados_normalizados = normalizar_dados(dados_processados.copy())
-    print("> Dados processados e normalizados com sucesso.")
+    alvos_para_modelagem = ['Diagnosis', 'Severity', 'Management']
 
-    # Define as colunas alvo para treinamento de modelos individuais.
-    targets_para_treinar = ['Diagnosis', 'Severity', 'Management']
+    for alvo_atual in alvos_para_modelagem:
+        conjunto_para_modelagem = dados_transformados.copy()
 
-    # Treina um modelo para cada coluna alvo.
-    for target in targets_para_treinar:
-        df_para_treinamento = dados_normalizados.copy()
-
-        # Filtra os dados para 'Severity' e 'Management' se o diagnóstico for 'appendicitis'.
-        if target in ['Severity', 'Management']:
-            df_para_treinamento = df_para_treinamento[df_para_treinamento['Diagnosis'] == 'appendicitis'].copy()
-            if df_para_treinamento.empty:
-                print(f"Não há dados de 'appendicitis' para treinar o modelo de {target}. Pulando.")
+        if alvo_atual in ['Severity', 'Management']:
+            conjunto_para_modelagem = conjunto_para_modelagem[conjunto_para_modelagem['Diagnosis'] == 'appendicitis'].copy()
+            if conjunto_para_modelagem.empty:
+                print(f"Não há registros de 'appendicitis' para treinar o modelo de {alvo_atual}. Treinamento ignorado.")
                 continue
             
-        # Balanceia as classes para o target atual.
-        df_balanceado = balancear(df_para_treinamento, target)
+        conjunto_balanceado = ajustar_desbalanceamento_classes(conjunto_para_modelagem, alvo_atual)
 
-        # Treina o modelo individual para o target.
-        treinar_modelo_individual(df_balanceado, target)
+        treinar_e_persistir_modelo(conjunto_balanceado, alvo_atual)
     
     print("\n==================================================")
-    print(">>> Pipeline de treinamento concluído com sucesso! <<<")
+    print(">>> Pipeline de Geração de Modelos Concluído! <<<")
     print("==================================================")

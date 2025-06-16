@@ -4,156 +4,157 @@ import pandas as pd
 import sys
 import os
 
-# Importa a função de normalização do pipeline de dados
-from data_pipeline.normalization import normalizar_paciente
+# Importa a função de preparação de dados para inferência
+from data_pipeline.normalization import preparar_paciente_para_inferencia
 
-def limpar_tela():
-    """Limpa a tela do terminal."""
+def apagar_tela_terminal():
+    """Limpa o conteúdo visível do terminal."""
     if os.name == 'nt':
         _ = os.system('cls')
     else:
         _ = os.system('clear')
 
-def is_float(text):
-    """Valida se uma string pode ser convertida para float."""
-    if not text:
+def eh_numero_decimal(texto):
+    """Verifica se uma string pode ser convertida para um número decimal."""
+    if not texto:
         return False
     try:
-        float(text)
+        float(texto)
         return True
     except ValueError:
         return False
 
-def coletar_dado(pergunta, tipo='str', opcoes=None, valor_default=None):
+def obter_entrada_usuario(questionamento, tipo_esperado='str', opcoes_validas=None, valor_ausente=None):
     """
-    Coleta uma entrada do usuário com validação.
-    Retorna None se a coleta for cancelada.
+    Solicita e valida uma entrada do usuário.
+    Retorna None se o usuário optar por cancelar a entrada.
     """
     while True:
         try:
-            if opcoes:
-                print(f"\n{pergunta} Opções: {', '.join(opcoes)}")
-                resposta = input("Sua escolha: ").strip()
-                if resposta == '' and valor_default is not None:
-                    return valor_default
-                if resposta not in opcoes:
+            if opcoes_validas:
+                print(f"\n{questionamento} Opções: {', '.join(opcoes_validas)}")
+                resposta_bruta = input("Sua escolha: ").strip()
+                if resposta_bruta == '' and valor_ausente is not None:
+                    return valor_ausente
+                if resposta_bruta not in opcoes_validas:
                     print("Opção inválida. Por favor, escolha uma das opções fornecidas.")
                     continue
             else:
-                resposta = input(f"\n{pergunta}: ").strip()
-                if resposta == '' and valor_default is not None:
-                    return valor_default
+                resposta_bruta = input(f"\n{questionamento}: ").strip()
+                if resposta_bruta == '' and valor_ausente is not None:
+                    return valor_ausente
             
-            if resposta == '' and tipo != 'str' and valor_default is None:
+            if resposta_bruta == '' and tipo_esperado != 'str' and valor_ausente is None:
                 print("Entrada obrigatória não pode ser vazia.")
                 continue
 
-            if tipo == 'float':
-                if is_float(resposta):
-                    return float(resposta)
+            if tipo_esperado == 'float':
+                if eh_numero_decimal(resposta_bruta):
+                    return float(resposta_bruta)
                 else:
                     print("Entrada inválida. Por favor, digite um número (ex: 37.5 ou 10).")
                     continue
-            elif tipo == 'int':
-                if resposta.isdigit():
-                    return int(resposta)
+            elif tipo_esperado == 'int':
+                if resposta_bruta.isdigit():
+                    return int(resposta_bruta)
                 else:
                     print("Entrada inválida. Por favor, digite um número inteiro.")
                     continue
-            elif tipo == 'bool_sim_nao':
-                if resposta.lower() == 'sim': return 'yes'
-                if resposta.lower() == 'nao' or resposta.lower() == 'não': return 'no'
+            elif tipo_esperado == 'resposta_sim_nao':
+                if resposta_bruta.lower() == 'sim': return 'yes'
+                if resposta_bruta.lower() == 'nao' or resposta_bruta.lower() == 'não': return 'no'
                 print("Entrada inválida. Por favor, digite 'Sim' ou 'Não'.")
                 continue
-            elif tipo == 'genero':
-                if resposta.lower() == 'feminino': return 'female'
-                if resposta.lower() == 'masculino': return 'male'
+            elif tipo_esperado == 'classificacao_genero':
+                if resposta_bruta.lower() == 'feminino': return 'female'
+                if resposta_bruta.lower() == 'masculino': return 'male'
                 print("Entrada inválida. Por favor, digite 'Feminino' ou 'Masculino'.")
                 continue
-            elif tipo == 'fezes':
-                if resposta.lower() == 'normal': return 'normal'
-                if resposta.lower() == 'constipacao' or resposta.lower() == 'constipação': return 'constipation'
-                if resposta.lower() == 'diarreia': return 'diarrhea'
-                if resposta.lower() == 'constipacao e diarreia' or resposta.lower() == 'constipação e diarreia': return 'constipation, diarrhea'
+            elif tipo_esperado == 'estado_fezes':
+                if resposta_bruta.lower() == 'normal': return 'normal'
+                if resposta_bruta.lower() == 'constipacao' or resposta_bruta.lower() == 'constipação': return 'constipation'
+                if resposta_bruta.lower() == 'diarreia': return 'diarrhea'
+                if resposta_bruta.lower() == 'constipacao e diarreia' or resposta_bruta.lower() == 'constipação e diarreia': return 'constipation, diarrhea'
                 print("Entrada inválida. Opções: Normal, Constipação, Diarreia, Constipação e Diarreia.")
                 continue
-            elif tipo == 'peritonite':
-                if resposta.lower() == 'nao' or resposta.lower() == 'não': return 'no'
-                if resposta.lower() == 'localizada': return 'local'
-                if resposta.lower() == 'generalizada': return 'generalized'
+            elif tipo_esperado == 'tipo_peritonite':
+                if resposta_bruta.lower() == 'nao' or resposta_bruta.lower() == 'não': return 'no'
+                if resposta_bruta.lower() == 'localizada': return 'local'
+                if resposta_bruta.lower() == 'generalizada': return 'generalized'
                 print("Entrada inválida. Opções: Não, Localizada, Generalizada.")
                 continue
-            elif tipo == 'cetonas' or tipo == 'rbc_wbc_urina':
-                if resposta.lower() == 'no' or resposta.lower() == 'não': return 'no'
-                if resposta == '+': return '+'
-                if resposta == '++': return '++'
-                if resposta == '+++': return '+++'
+            elif tipo_esperado == 'niveis_urina':
+                if resposta_bruta.lower() == 'no' or resposta_bruta.lower() == 'não': return 'no'
+                if resposta_bruta == '+': return '+'
+                if resposta_bruta == '++': return '++'
+                if resposta_bruta == '+++': return '+++'
                 print("Entrada inválida. Opções: Não, +, ++, +++.")
                 continue
             else:
-                return resposta.lower() if isinstance(resposta, str) else resposta
+                return resposta_bruta.lower() if isinstance(resposta_bruta, str) else resposta_bruta
         except KeyboardInterrupt:
             print("\nColeta de dados cancelada pelo usuário.")
             return None
 
-def coletar_dados_paciente():
-    """Coleta interativamente os dados de um novo paciente."""
-    limpar_tela()
+def coletar_informacoes_do_paciente():
+    """
+    Guia o usuário na inserção das informações clínicas de um novo paciente.
+    Retorna um dicionário com todos os dados coletados ou None em caso de cancelamento.
+    """
+    apagar_tela_terminal()
     print("=" * 50)
-    print("     Coleta de Dados do Novo Paciente")
+    print("     Registro de Informações do Paciente")
     print("=" * 50)
     print("\nInstruções:")
     print(" -> Preencha os campos solicitados.")
-    print(" -> Em campos com 'Sim'/'Não', digite a palavra completa.")
-    print(" -> Pressione Ctrl+C a qualquer momento para cancelar a coleta.\n")
+    print(" -> Para perguntas com 'Sim'/'Não', digite a palavra completa.")
+    print(" -> Pressione Ctrl+C a qualquer momento para cancelar a operação.\n")
 
-    dados_paciente = {}
+    dados_paciente_compilados = {}
 
-    # Configurações para cada pergunta.
-    perguntas_config = {
-        'Age': {'pergunta': 'Qual a idade do paciente?', 'tipo': 'float'},
-        'BMI': {'pergunta': 'Qual o IMC (Índice de Massa Corporal)?', 'tipo': 'float'},
-        'Sex': {'pergunta': 'Qual o sexo do paciente?', 'tipo': 'genero', 'opcoes': ['Feminino', 'Masculino']},
-        'Height': {'pergunta': 'Qual a altura (em cm)?', 'tipo': 'float'},
-        'Weight': {'pergunta': 'Qual o peso (em kg)?', 'tipo': 'float'},
-        'Length_of_Stay': {'pergunta': 'Qual foi o tempo de permanência (em dias)?', 'tipo': 'float'},
+    configuracoes_perguntas = {
+        'Age': {'questionamento': 'Qual a idade do paciente?', 'tipo_esperado': 'float'},
+        'BMI': {'questionamento': 'Qual o IMC (Índice de Massa Corporal)?', 'tipo_esperado': 'float'},
+        'Sex': {'questionamento': 'Qual o sexo do paciente?', 'tipo_esperado': 'classificacao_genero', 'opcoes_validas': ['Feminino', 'Masculino']},
+        'Height': {'questionamento': 'Qual a altura (em cm)?', 'tipo_esperado': 'float'},
+        'Weight': {'questionamento': 'Qual o peso (em kg)?', 'tipo_esperado': 'float'},
+        'Length_of_Stay': {'questionamento': 'Qual foi o tempo de permanência no hospital (em dias)?', 'tipo_esperado': 'float'},
         
-        'Migratory_Pain': {'pergunta': 'Houve dor migratória?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Lower_Right_Abd_Pain': {'pergunta': 'Paciente tem dor no abdômen inferior direito?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Contralateral_Rebound_Tenderness': {'pergunta': 'Houve sensibilidade contralateral (Blumberg)?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Coughing_Pain': {'pergunta': 'Sente dor ao tossir?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Nausea': {'pergunta': 'Apresentou náusea?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Loss_of_Appetite': {'pergunta': 'Houve perda de apetite?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Body_Temperature': {'pergunta': 'Qual a temperatura corporal (em °C)?', 'tipo': 'float'},
-        'Dysuria': {'pergunta': 'Apresenta disúria (dor ao urinar)?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Stool': {'pergunta': 'Como está o trânsito intestinal (fezes)?', 'tipo': 'fezes', 'opcoes': ['Normal', 'Constipação', 'Diarreia', 'Constipação e Diarreia']},
-        'Peritonitis': {'pergunta': 'Apresenta sinais de peritonite?', 'tipo': 'peritonite', 'opcoes': ['Não', 'Localizada', 'Generalizada']},
-        'Psoas_Sign': {'pergunta': 'O sinal de Psoas é positivo?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Ipsilateral_Rebound_Tenderness': {'pergunta': 'Houve sensibilidade ipsilateral?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
+        'Migratory_Pain': {'questionamento': 'Houve dor migratória?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Lower_Right_Abd_Pain': {'questionamento': 'O paciente tem dor no abdômen inferior direito?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Contralateral_Rebound_Tenderness': {'questionamento': 'Foi observada sensibilidade contralateral (sinal de Blumberg)?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Coughing_Pain': {'questionamento': 'O paciente sente dor ao tossir?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Nausea': {'questionamento': 'O paciente apresentou náusea?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Loss_of_Appetite': {'questionamento': 'Houve perda de apetite?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Body_Temperature': {'questionamento': 'Qual a temperatura corporal (em °C)?', 'tipo_esperado': 'float'},
+        'Dysuria': {'questionamento': 'O paciente apresenta disúria (dor ao urinar)?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Stool': {'questionamento': 'Como está o trânsito intestinal (fezes)?', 'tipo_esperado': 'estado_fezes', 'opcoes_validas': ['Normal', 'Constipação', 'Diarreia', 'Constipação e Diarreia']},
+        'Peritonitis': {'questionamento': 'Foram observados sinais de peritonite?', 'tipo_esperado': 'tipo_peritonite', 'opcoes_validas': ['Não', 'Localizada', 'Generalizada']},
+        'Psoas_Sign': {'questionamento': 'O sinal de Psoas é positivo?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Ipsilateral_Rebound_Tenderness': {'questionamento': 'Houve sensibilidade ipsilateral?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
         
-        'Alvarado_Score': {'pergunta': 'Qual o Escore de Alvarado (0-10)?', 'tipo': 'int', 'opcoes': [str(i) for i in range(11)]},
-        'Paedriatic_Appendicitis_Score': {'pergunta': 'Qual o Escore Pediátrico de Apendicite (PAS) (0-10)?', 'tipo': 'int', 'opcoes': [str(i) for i in range(11)]},
+        'Alvarado_Score': {'questionamento': 'Qual o Escore de Alvarado (0-10)?', 'tipo_esperado': 'int', 'opcoes_validas': [str(i) for i in range(11)]},
+        'Paedriatic_Appendicitis_Score': {'questionamento': 'Qual o Escore Pediátrico de Apendicite (PAS) (0-10)?', 'tipo_esperado': 'int', 'opcoes_validas': [str(i) for i in range(11)]},
         
-        'WBC_Count': {'pergunta': 'Qual a contagem de leucócitos (x10^9/L)?', 'tipo': 'float'},
-        'Neutrophil_Percentage': {'pergunta': 'Qual a porcentagem de neutrófilos (%)?', 'tipo': 'float'},
-        'Neutrophilia': {'pergunta': 'Apresenta neutrofilia?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'RBC_Count': {'pergunta': 'Qual a contagem de hemácias?', 'tipo': 'float'},
-        'Hemoglobin': {'pergunta': 'Qual o nível de hemoglobina (g/dL)?', 'tipo': 'float'},
-        'RDW': {'pergunta': 'Qual o valor do RDW (%)?', 'tipo': 'float'},
-        'Thrombocyte_Count': {'pergunta': 'Qual a contagem de plaquetas?', 'tipo': 'float'},
-        'Ketones_in_Urine': {'pergunta': 'Qual o nível de cetonas na urina?', 'tipo': 'cetonas', 'opcoes': ['Não', '+', '++', '+++']},
-        'RBC_in_Urine': {'pergunta': 'Qual o nível de hemácias na urina?', 'tipo': 'rbc_wbc_urina', 'opcoes': ['Não', '+', '++', '+++']},
-        'WBC_in_Urine': {'pergunta': 'Qual o nível de leucócitos na urina?', 'tipo': 'rbc_wbc_urina', 'opcoes': ['Não', '+', '++', '+++']},
-        'CRP': {'pergunta': 'Qual o valor da Proteína C-Reativa (PCR) (mg/L)?', 'tipo': 'float'},
+        'WBC_Count': {'questionamento': 'Qual a contagem de leucócitos (x10^9/L)?', 'tipo_esperado': 'float'},
+        'Neutrophil_Percentage': {'questionamento': 'Qual a porcentagem de neutrófilos (%)?', 'tipo_esperado': 'float'},
+        'Neutrophilia': {'questionamento': 'O paciente apresenta neutrofilia?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'RBC_Count': {'questionamento': 'Qual a contagem de hemácias?', 'tipo_esperado': 'float'},
+        'Hemoglobin': {'questionamento': 'Qual o nível de hemoglobina (g/dL)?', 'tipo_esperado': 'float'},
+        'RDW': {'questionamento': 'Qual o valor do RDW (%)?', 'tipo_esperado': 'float'},
+        'Thrombocyte_Count': {'questionamento': 'Qual a contagem de plaquetas?', 'tipo_esperado': 'float'},
+        'Ketones_in_Urine': {'questionamento': 'Qual o nível de cetonas na urina?', 'tipo_esperado': 'niveis_urina', 'opcoes_validas': ['Não', '+', '++', '+++']},
+        'RBC_in_Urine': {'questionamento': 'Qual o nível de hemácias na urina?', 'tipo_esperado': 'niveis_urina', 'opcoes_validas': ['Não', '+', '++', '+++']},
+        'WBC_in_Urine': {'questionamento': 'Qual o nível de leucócitos na urina?', 'tipo_esperado': 'niveis_urina', 'opcoes_validas': ['Não', '+', '++', '+++']},
+        'CRP': {'questionamento': 'Qual o valor da Proteína C-Reativa (PCR) (mg/L)?', 'tipo_esperado': 'float'},
         
-        'US_Performed': {'pergunta': 'O ultrassom foi realizado?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Appendix_on_US': {'pergunta': 'O apêndice foi visível no ultrassom?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
-        'Appendix_Diameter': {'pergunta': 'Qual o diâmetro do apêndice (em mm)?', 'tipo': 'float'},
-        'Free_Fluids': {'pergunta': 'Foram observados fluidos livres no ultrassom?', 'tipo': 'bool_sim_nao', 'opcoes': ['Sim', 'Não']},
+        'US_Performed': {'questionamento': 'O ultrassom foi realizado?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Appendix_on_US': {'questionamento': 'O apêndice foi visível no ultrassom?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
+        'Appendix_Diameter': {'questionamento': 'Qual o diâmetro do apêndice (em mm)?', 'tipo_esperado': 'float'},
+        'Free_Fluids': {'questionamento': 'Foram observados fluidos livres no ultrassom?', 'tipo_esperado': 'resposta_sim_nao', 'opcoes_validas': ['Sim', 'Não']},
     }
 
-    # Ordem e agrupamento das perguntas.
-    ordem_perguntas = [
+    sequencia_perguntas = [
         'Age', 'Sex', 'Height', 'Weight', 'BMI', 'Length_of_Stay',
         'Migratory_Pain', 'Lower_Right_Abd_Pain', 'Contralateral_Rebound_Tenderness',
         'Coughing_Pain', 'Nausea', 'Loss_of_Appetite', 'Body_Temperature', 'Dysuria',
@@ -164,61 +165,60 @@ def coletar_dados_paciente():
         'US_Performed'
     ]
 
-    # Coleta de dados.
-    for col in ordem_perguntas:
-        config = perguntas_config[col]
-        pergunta = config['pergunta']
-        tipo = config['tipo']
-        opcoes = config.get('opcoes')
+    for coluna_dado in sequencia_perguntas:
+        config_pergunta = configuracoes_perguntas[coluna_dado]
+        questionamento_atual = config_pergunta['questionamento']
+        tipo_dado_esperado = config_pergunta['tipo_esperado']
+        opcoes_disponiveis = config_pergunta.get('opcoes_validas')
 
-        if col == 'US_Performed':
-            us_performed = coletar_dado(pergunta, tipo, opcoes)
-            if us_performed is None: return None
-            dados_paciente[col] = us_performed
+        if coluna_dado == 'US_Performed':
+            ultrassom_realizado = obter_entrada_usuario(questionamento_atual, tipo_dado_esperado, opcoes_disponiveis)
+            if ultrassom_realizado is None: return None
+            dados_paciente_compilados[coluna_dado] = ultrassom_realizado
 
-            # Se ultrassom não foi realizado, preenche dados relacionados com valores padrão.
-            if us_performed == 'no':
-                dados_paciente['Appendix_on_US'] = 'no'
-                dados_paciente['Appendix_Diameter'] = 0.0
-                dados_paciente['Free_Fluids'] = 'no'
-            else: # Se ultrassom foi realizado, coleta mais informações.
-                res_app_on_us = coletar_dado(perguntas_config['Appendix_on_US']['pergunta'], 
-                                             perguntas_config['Appendix_on_US']['tipo'], 
-                                             perguntas_config['Appendix_on_US']['opcoes'])
-                if res_app_on_us is None: return None
-                dados_paciente['Appendix_on_US'] = res_app_on_us
+            if ultrassom_realizado == 'no':
+                dados_paciente_compilados['Appendix_on_US'] = 'no'
+                dados_paciente_compilados['Appendix_Diameter'] = 0.0
+                dados_paciente_compilados['Free_Fluids'] = 'no'
+            else:
+                info_apendice_us = obter_entrada_usuario(configuracoes_perguntas['Appendix_on_US']['questionamento'], 
+                                             configuracoes_perguntas['Appendix_on_US']['tipo_esperado'], 
+                                             configuracoes_perguntas['Appendix_on_US']['opcoes_validas'])
+                if info_apendice_us is None: return None
+                dados_paciente_compilados['Appendix_on_US'] = info_apendice_us
 
-                res_app_diameter = coletar_dado(perguntas_config['Appendix_Diameter']['pergunta'], 
-                                                perguntas_config['Appendix_Diameter']['tipo'])
-                if res_app_diameter is None: return None
-                dados_paciente['Appendix_Diameter'] = res_app_diameter
+                diametro_apendice = obter_entrada_usuario(configuracoes_perguntas['Appendix_Diameter']['questionamento'], 
+                                                 configuracoes_perguntas['Appendix_Diameter']['tipo_esperado'])
+                if diametro_apendice is None: return None
+                dados_paciente_compilados['Appendix_Diameter'] = diametro_apendice
 
-                res_free_fluids = coletar_dado(perguntas_config['Free_Fluids']['pergunta'], 
-                                              perguntas_config['Free_Fluids']['tipo'], 
-                                              perguntas_config['Free_Fluids']['opcoes'])
-                if res_free_fluids is None: return None
-                dados_paciente['Free_Fluids'] = res_free_fluids
+                fluidos_livres = obter_entrada_usuario(configuracoes_perguntas['Free_Fluids']['questionamento'], 
+                                              configuracoes_perguntas['Free_Fluids']['tipo_esperado'], 
+                                              configuracoes_perguntas['Free_Fluids']['opcoes_validas'])
+                if fluidos_livres is None: return None
+                dados_paciente_compilados['Free_Fluids'] = fluidos_livres
             
-            continue # Pula para a próxima pergunta após tratar o ultrassom.
+            continue
 
-        # Coleta dados para as outras perguntas.
-        resposta = coletar_dado(pergunta, tipo, opcoes)
-        if resposta is None:
+        resposta_coletada = obter_entrada_usuario(questionamento_atual, tipo_dado_esperado, opcoes_disponiveis)
+        if resposta_coletada is None:
             return None
-        dados_paciente[col] = resposta
+        dados_paciente_compilados[coluna_dado] = resposta_coletada
         
-    return dados_paciente
+    return dados_paciente_compilados
 
-def novo_paciente():
-    """Coleta dados do paciente e os normaliza para inferência."""
-    dados_dict = coletar_dados_paciente()
+def registrar_novo_paciente():
+    """
+    Orquestra a coleta de informações de um novo paciente e a preparação
+    desses dados para serem utilizados pelos modelos de inferência.
+    """
+    dicionario_dados_brutos = coletar_informacoes_do_paciente()
     
-    if dados_dict is None:
-        print("\nColeta de dados cancelada. Retornando ao menu principal.")
+    if dicionario_dados_brutos is None:
+        print("\nRegistro do paciente cancelado. Retornando ao menu principal.")
         return None
 
-    # Converte os dados coletados em DataFrame e os normaliza.
-    paciente_df = pd.DataFrame([dados_dict])
-    paciente_normalizado = normalizar_paciente(paciente_df)
+    dataframe_paciente = pd.DataFrame([dicionario_dados_brutos])
+    paciente_pronto_para_modelo = preparar_paciente_para_inferencia(dataframe_paciente)
     
-    return paciente_normalizado
+    return paciente_pronto_para_modelo
